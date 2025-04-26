@@ -1,38 +1,103 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
-  <meta charset="UTF-8">
-  <title>Manage Announcements</title>
+    <meta charset="UTF-8">
+    <title>Gestione Annunci - FERRIOLI.EU</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        #announcements-list {
+            margin-top: 20px;
+        }
+        .announcement {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+    </style>
 </head>
 <body>
-  <h2>Add New Announcement</h2>
-  <input type="text" id="new-announcement" placeholder="Write announcement here">
-  <button onclick="addAnnouncement()">Add</button>
+    <h2>Gestione Annunci</h2>
+    
+    <div>
+        <input type="text" id="new-announcement" placeholder="Scrivi il nuovo annuncio" style="width: 70%; padding: 8px;">
+        <button onclick="addAnnouncement()" style="padding: 8px 15px;">Aggiungi</button>
+    </div>
+    
+    <div id="announcements-list"></div>
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js";
-    import { getDatabase, ref, push } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-database.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js";
-    import { firebaseConfig } from './firebase-config.js';
+    <script src="https://cdn.appwrite.io/v1.0.0/appwrite.min.js"></script>
+    <script type="module">
+        import { account, databases, ADMIN_EMAILS } from './appwrite.js';
+        
+        try {
+            const user = await account.get();
+            
+            // Verifica se è admin
+            if(!ADMIN_EMAILS.includes(user.email)) {
+                window.location.href = 'unauthorized.html';
+                return;
+            }
+            
+            // Carica annunci esistenti
+            loadAnnouncements();
+            
+        } catch (error) {
+            window.location.href = 'index.html';
+        }
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-    const auth = getAuth(app);
+        async function loadAnnouncements() {
+            try {
+                const announcements = await databases.listDocuments('announcements', 'main');
+                const list = document.getElementById('announcements-list');
+                list.innerHTML = '';
+                
+                announcements.documents.forEach(ann => {
+                    const div = document.createElement('div');
+                    div.className = 'announcement';
+                    div.innerHTML = `
+                        <p>${ann.text}</p>
+                        <small>Creato il: ${new Date(ann.$createdAt).toLocaleString()}</small>
+                        <button onclick="deleteAnnouncement('${ann.$id}')" style="float: right; margin-left: 10px;">Elimina</button>
+                    `;
+                    list.appendChild(div);
+                });
+            } catch (error) {
+                console.error('Errore nel caricamento annunci:', error);
+            }
+        }
 
-    onAuthStateChanged(auth, (user) => {
-      if (!user || (user.email !== "jacopo@ferrioli.eu" && user.email !== "postmaster@ferrioli.eu" && user.email !== "amministrazione.generale@cas.ferrioli.eu")) {
-        window.location.href = "unauthorized.html";
-      }
-    });
+        window.addAnnouncement = async function() {
+            const text = document.getElementById('new-announcement').value.trim();
+            if (!text) return;
+            
+            try {
+                await databases.createDocument('announcements', 'main', 'unique()', {
+                    text: text
+                });
+                
+                document.getElementById('new-announcement').value = '';
+                loadAnnouncements();
+            } catch (error) {
+                alert('Errore: ' + error.message);
+            }
+        };
 
-    window.addAnnouncement = () => {
-      const text = document.getElementById('new-announcement').value;
-      if (text) {
-        push(ref(db, 'announcements/'), text);
-        document.getElementById('new-announcement').value = '';
-        alert("Announcement added!");
-      }
-    };
-  </script>
+        window.deleteAnnouncement = async function(id) {
+            if (!confirm('Eliminare questo annuncio?')) return;
+            
+            try {
+                await databases.deleteDocument('announcements', 'main', id);
+                loadAnnouncements();
+            } catch (error) {
+                alert('Errore: ' + error.message);
+            }
+        };
+    </script>
 </body>
 </html>
