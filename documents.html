@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="it">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Documents - FERRIOLI.EU</title>
+    <title>Documenti - FERRIOLI.EU</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         :root {
@@ -44,66 +44,76 @@
     </style>
 </head>
 <body>
+    <nav class="navbar">
+        <img src="../assets/img/logo.png" alt="Logo" class="navbar-logo">
+        <div class="user-menu">
+            <span id="userInfo"></span>
+            <button class="btn-logout">Logout</button>
+        </div>
+    </nav>
+
     <div class="doc-container">
-        <h1 class="text-center mb-4">Documents</h1>
-        
-        <!-- Placeholder for documents -->
+        <h1 class="text-center mb-4">Documenti Aziendali</h1>
         <div id="documentsList"></div>
     </div>
 
-    <!-- Font Awesome for icons -->
-    <script src="https://kit.fontawesome.com/your-code.js" crossorigin="anonymous"></script>
-    <!-- Bootstrap JS -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
     <script src="https://cdn.appwrite.io/v1.0.0/appwrite.min.js"></script>
-    <script>
-        // Inizializzazione SDK Appwrite
-        const sdk = new Appwrite();
-        sdk.setEndpoint('https://fra.cloud.appwrite.io/v1').setProject('680c9ede00072e23888c');  // Modifica con il tuo endpoint e Project ID
-
-        // ID del tuo Bucket Appwrite dove sono ospitati i documenti
-        const bucketId = '680c9f6c001fc72fa1ce';  // Inserisci l'ID del tuo bucket qui
-
-        // Funzione per ottenere il link di visualizzazione del file
-        async function getDocumentUrl(fileId) {
-            try {
-                const file = await sdk.storage.getFileView(bucketId, fileId);
-                return file.href;  // Questo restituisce l'URL per visualizzare il file
-            } catch (error) {
-                console.error("Errore nel recupero del file:", error);
-                return null;
-            }
+    <script type="module">
+        import { account, storage, ADMIN_EMAILS } from './appwrite.js';
+        
+        // Verifica autenticazione e mostra info utente
+        try {
+            const user = await account.get();
+            const userData = JSON.parse(sessionStorage.getItem('user')) || {};
+            document.getElementById('userInfo').textContent = `${userData.name} | ${user.email}`;
+            
+            // Carica documenti
+            const isAdmin = ADMIN_EMAILS.includes(user.email);
+            await loadDocuments(isAdmin);
+            
+            // Logout
+            document.querySelector('.btn-logout').addEventListener('click', async () => {
+                await account.deleteSession('current');
+                sessionStorage.removeItem('user');
+                window.location.href = '../index.html';
+            });
+        } catch (error) {
+            window.location.href = '../index.html';
         }
 
-        // Caricare e visualizzare i documenti
-        fetch('/assets/json/documents.json')  // Recupera il JSON che contiene i documenti
-            .then(response => response.json())
-            .then(data => {
+        async function loadDocuments(isAdmin) {
+            try {
+                const response = await fetch('../assets/json/documents.json');
+                const data = await response.json();
                 const documentsList = document.getElementById('documentsList');
+                documentsList.innerHTML = '';
 
-                // Itera sui documenti e aggiungi ciascun elemento nella lista
-                data.documents.forEach(doc => {
-                    // Recupera l'URL del file tramite Appwrite API
-                    getDocumentUrl(doc.file_id).then(url => {
-                        if (url) {
+                for(const doc of data.documents) {
+                    // Solo admin vede tutti i documenti
+                    if(isAdmin || doc.public) {
+                        try {
+                            const file = await storage.getFileView('680c9f6c001fc72fa1ce', doc.file_id);
+                            
                             const docItem = document.createElement('div');
                             docItem.classList.add('doc-item');
                             docItem.innerHTML = `
-                                <a href="${url}" target="_blank">
+                                <a href="${file.href}" target="_blank">
                                     <i class="fas fa-file-${doc.type === 'pdf' ? 'pdf' : 'word'}"></i> 
-                                    ${doc.title}
+                                    ${doc.title} ${isAdmin && !doc.public ? '(Privato)' : ''}
                                 </a>
                                 <p>${doc.description}</p>
                             `;
                             documentsList.appendChild(docItem);
+                        } catch (error) {
+                            console.error(`Errore nel caricare il documento ${doc.title}:`, error);
                         }
-                    });
-                });
-            })
-            .catch(error => {
+                    }
+                }
+            } catch (error) {
                 console.error('Errore nel caricare i documenti:', error);
-            });
+                documentsList.innerHTML = '<p class="text-danger">Errore nel caricamento dei documenti</p>';
+            }
+        }
     </script>
 </body>
 </html>
